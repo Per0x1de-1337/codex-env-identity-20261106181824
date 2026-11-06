@@ -1,0 +1,31 @@
+name: Environment ref-type binding probe
+
+on:
+  push:
+    branches:
+      - '**'
+    tags:
+      - '**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gated:
+    runs-on: ubuntu-latest
+    environment: BranchTypeGate
+    steps:
+      - name: Emit only the synthetic marker digest
+        env:
+          GATE_MARKER: ${{ secrets.GATE_MARKER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${GATE_MARKER}" ]]; then
+            echo '{"secret_present":false}'
+            exit 1
+          fi
+          digest="$(printf '%s' "${GATE_MARKER}" | sha256sum | awk '{print $1}')"
+          printf '{"secret_present":true,"sha256":"%s","ref_type":"%s","ref_name":"%s","actor":"%s"}\n' \
+            "${digest}" "${GITHUB_REF_TYPE}" "${GITHUB_REF_NAME}" "${GITHUB_ACTOR}"
