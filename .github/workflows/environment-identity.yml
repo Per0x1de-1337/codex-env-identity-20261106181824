@@ -1,0 +1,95 @@
+name: Environment identity boundary
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  resolve:
+    name: ${{ matrix.label }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: protected-colon
+            env_name: 'Canon:Colon'
+            expected_sha256: 45d547fa19b9f6240d9d39dc441ce81f42dcdd51dd3fefdf2106baebd01f58b6
+          - label: unprotected-percent-colon
+            env_name: 'Canon%3AColon'
+            expected_sha256: db42a3382319362804b761cf4e1ad007043b23116227facd47b55d4f311cfc3c
+          - label: protected-slash
+            env_name: 'Canon/Slash'
+            expected_sha256: 33450a4f43cbfc2e9b914cb02f65655a9a972ed37ebf97a4d1b667c11ebcaf59
+          - label: unprotected-percent-slash
+            env_name: 'Canon%2FSlash'
+            expected_sha256: eca971e63315ef4347cc1241e49ed05e54c3eca2aa659b9676f9d0ed42be1839
+          - label: protected-plain-a
+            env_name: 'CanonA'
+            expected_sha256: f35d46cc50adeedcf9c6de6941b7866eecb5c36ebe2c804f71945cbdc982fcf8
+          - label: unprotected-percent-41
+            env_name: 'Canon%41'
+            expected_sha256: 33286dba31a22f7bfd24fa625c35ba048c1b37b23abb29b1507788babd9aa185
+          - label: protected-no-trailing-dot
+            env_name: 'Canon-Trailing'
+            expected_sha256: f55f1d1f2aad1ae485e545c294b49bb1d645cd403d34ec725a3dab28a3866829
+          - label: unprotected-trailing-dot
+            env_name: 'Canon-Trailing.'
+            expected_sha256: 8eac9151aefe6b992161b4be1738d28f976880157b3516830dbe8f386da21894
+          - label: protected-forward-slash
+            env_name: 'Canon/Path'
+            expected_sha256: 04853ebe673c20d71a5bfea1ea7cf36043edcc5d77520e40fc23729057a73c40
+          - label: unprotected-backslash
+            env_name: 'Canon\Path'
+            expected_sha256: 781c5b5ca18c3235561c64f5a33251f36298fb97e6e43949a04f3f45e138df67
+          - label: protected-space
+            env_name: 'Canon Plus'
+            expected_sha256: 0599cb2065266fd33f8614da5662846a2f53d4ea11264a1d5e9b3a04cc2684df
+          - label: unprotected-plus
+            env_name: 'Canon+Plus'
+            expected_sha256: ff4d42f870a6bb647496b58027e891edfd85de8d60bba70e3938ccab5a331f8c
+          - label: protected-dot-segment-target
+            env_name: 'Prod'
+            expected_sha256: 6169593b4054a4b8d62dd518b345e107677dd562c5e1eceac0357e7c0595622c
+          - label: unprotected-dot-segment
+            env_name: 'Canon/../Prod'
+            expected_sha256: 2e97110299df5f3cc4e969f5b5dfe0a9ec16cefe5cdab48ab5295059b8ce6f80
+          - label: protected-single-encoded
+            env_name: 'Canon%2FDouble'
+            expected_sha256: 7d49acf8eb6af641ae1cdec6c76e073f4a02687e846bb7192b21874293acc22b
+          - label: unprotected-double-encoded
+            env_name: 'Canon%252FDouble'
+            expected_sha256: e44189b5793782e4e2fa7ce8b26621178200463ec6347c84fe0b52019b4cb7c3
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: ${{ matrix.env_name }}
+    steps:
+      - name: Compare only synthetic-secret digests
+        shell: bash
+        env:
+          PROBE: ${{ secrets.CANONICALIZATION_PROBE }}
+          EXPECTED_NAME: ${{ matrix.env_name }}
+          EXPECTED_SHA256: ${{ matrix.expected_sha256 }}
+        run: |
+          set -euo pipefail
+          actual_sha256="$(printf '%s' "$PROBE" | sha256sum | cut -d' ' -f1)"
+          if [[ -n "$PROBE" ]]; then
+            secret_present=true
+          else
+            secret_present=false
+          fi
+          if [[ "$actual_sha256" == "$EXPECTED_SHA256" ]]; then
+            matches_expected=true
+          else
+            matches_expected=false
+          fi
+          result="$(jq -nc \
+            --arg environment "$EXPECTED_NAME" \
+            --arg expected_sha256 "$EXPECTED_SHA256" \
+            --arg actual_sha256 "$actual_sha256" \
+            --argjson secret_present "$secret_present" \
+            --argjson matches_expected "$matches_expected" \
+            '{environment:$environment,secret_present:$secret_present,expected_sha256:$expected_sha256,actual_sha256:$actual_sha256,matches_expected:$matches_expected}')"
+          printf 'CONTROL_PLANE_RESULT=%s\n' "$result"
+          [[ "$secret_present" == true && "$matches_expected" == true ]]
