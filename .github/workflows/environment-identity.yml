@@ -61,6 +61,15 @@ jobs:
           - label: unprotected-double-encoded
             env_name: 'Canon%252FDouble'
             expected_sha256: e44189b5793782e4e2fa7ce8b26621178200463ec6347c84fe0b52019b4cb7c3
+          - label: normalized-nfd-alias
+            env_name: 'Canon-é'
+            expected_sha256: d80f37a1f46398e1cafc1e874805b42e280ae1061cdd2ad6508279142f2879d4
+          - label: normalized-trailing-space-alias
+            env_name: 'Canon-Space '
+            expected_sha256: 6fa78da24ca1032812f728322ffe2cc611daa2d91c5bb75a5406683d3ed3fc7a
+          - label: normalized-case-alias
+            env_name: 'canon-case'
+            expected_sha256: 5462e339108d4862cb2df40ab8024e52e29a133763df874244ae3518d4c98fe8
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: ${{ matrix.env_name }}
