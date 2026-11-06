@@ -1,0 +1,35 @@
+name: CLI environment path binding
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  intended-protected:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: 'CLI%2FProtected'
+    steps:
+      - run: printf 'PROTECTED_JOB_EXECUTED=true\n'
+
+  unprotected-decoded-alias:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: 'CLI/Protected'
+    steps:
+      - name: Hash only the synthetic CLI-targeted marker
+        shell: bash
+        env:
+          PROBE: ${{ secrets.CLI_MISBIND_PROBE }}
+        run: |
+          set -euo pipefail
+          actual_sha256="$(printf '%s' "$PROBE" | sha256sum | cut -d' ' -f1)"
+          result="$(jq -nc \
+            --arg actual_sha256 "$actual_sha256" \
+            --arg expected_sha256 '7753962f3f1a72e09a867a2929876fd64c8514f3078a5fce2af7c2d0f652fc5c' \
+            --argjson secret_present "$([[ -n "$PROBE" ]] && printf true || printf false)" \
+            '{secret_present:$secret_present,actual_sha256:$actual_sha256,expected_sha256:$expected_sha256,matches_expected:($actual_sha256==$expected_sha256)}')"
+          printf 'CLI_MISBIND_RESULT=%s\n' "$result"
+          jq -e '.secret_present and .matches_expected' <<<"$result"
